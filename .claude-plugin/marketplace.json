@@ -1,0 +1,18 @@
+{
+  "name": "observer",
+  "description": "Observer Studio plugins for Claude Code",
+  "owner": { "name": "Observer Studio", "url": "https://github.com/Observerstudio" },
+  "plugins": [
+    {
+      "name": "och",
+      "description": "OCH — Observer Coordination Hub: shared claims, messages and knowledge for coding agents (6 hooks + /och:handoff)",
+      "version": "0.2.3",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/Observerstudio/observer-coordination-hub.git",
+        "path": "clients/plugin",
+        "ref": "main"
+      }
+    }
+  ]
+}

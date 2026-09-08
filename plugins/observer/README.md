@@ -24,29 +24,18 @@ opens your browser, you sign in with your normal account, pick a workspace
 and approve a scope list. The grant is per-person and revocable from
 **Settings → API tokens**.
 
-> The marketplace is named **`observer-os`**, not `observer` — this
-> account already has an `observer` marketplace pointing at
-> `Observerstudio/claude-plugins`, and two marketplaces cannot share a
-> name. Hence `observer@observer-os`.
-
-**1. Add the marketplace** — from GitHub:
+**1. Add the marketplace and install:**
 
 ```bash
-claude plugin marketplace add Observerstudio/observer-os
+claude plugin marketplace add Observerstudio/claude-plugins
+claude plugin install observer@observer
 ```
 
-…or from a local clone (either form works; in-session use `/plugin
-marketplace add` instead):
+That repo is **public**, so this needs no GitHub credentials — which
+matters, because the product's own repo is private and installing from it
+would exclude anyone who does not already clone it.
 
-```bash
-claude plugin marketplace add /path/to/observer-os
-```
-
-**2. Install:**
-
-```bash
-claude plugin install observer@observer-os
-```
+(In-session, use `/plugin marketplace add` and `/plugin install` instead.)
 
 **3. Sign in.** Start Claude Code and run `/mcp`. `observer` will be listed
 as needing authentication — authenticate it and a browser opens. Approve

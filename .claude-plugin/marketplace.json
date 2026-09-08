@@ -1,7 +1,10 @@
 {
   "name": "observer",
   "description": "Observer Studio plugins for Claude Code",
-  "owner": { "name": "Observer Studio", "url": "https://github.com/Observerstudio" },
+  "owner": {
+    "name": "Observer Studio",
+    "url": "https://github.com/Observerstudio"
+  },
   "plugins": [
     {
       "name": "och",
@@ -17,7 +20,7 @@
     {
       "name": "observer",
       "description": "File issues, track tasks, log time and read your standup in Observer OS from the terminal. Signs in through your browser; knows which project the current folder is.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "source": "./plugins/observer"
     }
   ]

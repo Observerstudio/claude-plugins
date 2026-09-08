@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# "Where am I?" — printed at session start.
+#
+# Answers two things an agent would otherwise have to ask about:
+#
+#   1. Which Observer project this folder is, resolved from the git remote
+#      via `ProjectRepository.fullName`. Exact, not a name match: guessing
+#      a project from a directory name succeeds confidently and files work
+#      into the wrong client's project.
+#   2. Which task the branch refers to, if it carries a key.
+#
+# Read-only. Writes nothing, and says nothing when it cannot answer —
+# printing "could not determine project" at every session start is noise
+# that trains people to ignore the whole block.
+
+set -uo pipefail
+
+OBSERVER_URL="${OBSERVER_URL:-https://os.observer.studio}"
+[ -n "${OBSERVER_TOKEN:-}" ] || exit 0
+git rev-parse --git-dir >/dev/null 2>&1 || exit 0
+
+remote="$(git remote get-url origin 2>/dev/null)" || exit 0
+[ -n "$remote" ] || exit 0
+
+mcp_call() {
+  curl -fsS --max-time 10 \
+    -H "Authorization: Bearer ${OBSERVER_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -X POST "$OBSERVER_URL/api/mcp" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}"
+}
+
+payload="$(printf '%s' "$remote" | python3 -c 'import json,sys; print(json.dumps({"repo": sys.stdin.read().strip()}))')"
+response="$(mcp_call project_for_repo "$payload" 2>/dev/null)" || exit 0
+
+# The tool's JSON arrives inside a text content block, so the project names
+# are pulled out with grep rather than a JSON parser — this runs on every
+# session start and should not need a dependency.
+names="$(printf '%s' "$response" \
+  | grep -oE '\\"name\\":\\"[^"\\]+' \
+  | sed 's/.*\\"name\\":\\"//' \
+  | paste -sd ", " -)"
+
+[ -n "$names" ] || exit 0
+
+printf 'observer: this folder is project %s\n' "$names"
+
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || exit 0
+key="$(printf '%s' "$branch" \
+  | grep -oE '(^|[^A-Za-z0-9])[A-Za-z]{2,6}-[0-9]{1,9}($|[^0-9])' \
+  | grep -oE '[A-Za-z]{2,6}-[0-9]{1,9}' | head -1)"
+[ -n "$key" ] && printf 'observer: this branch refers to task %s\n' "$key"
+
+exit 0

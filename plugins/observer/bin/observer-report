@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+#
+# Report a commit to Observer OS.
+#
+# A git hook, deliberately: a commit happens whichever agent — or person —
+# made it, so this one trigger covers Claude Code, Cursor, Codex, Copilot,
+# an IDE, or `git commit` by hand. Harness hooks can only ever cover one
+# tool each; git covers all of them.
+#
+# Usage:
+#   observer-report install        install into .git/hooks/post-commit
+#   observer-report uninstall      remove it
+#   observer-report                report HEAD (what the hook calls)
+#
+# Requires OBSERVER_TOKEN. OBSERVER_URL defaults to production.
+#
+# Never fails a commit. A reporting tool that can block `git commit` will be
+# uninstalled by the first person it inconveniences, so every failure path
+# here warns and exits 0.
+
+set -uo pipefail
+
+OBSERVER_URL="${OBSERVER_URL:-https://observer.studio}"
+HOOK_MARKER="# observer-report"
+
+warn() { printf 'observer: %s\n' "$1" >&2; }
+
+install_hook() {
+  local root hook
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    warn "not a git repository"; exit 1;
+  }
+  hook="$root/.git/hooks/post-commit"
+
+  if [ -f "$hook" ] && grep -qF "$HOOK_MARKER" "$hook"; then
+    warn "already installed"
+    exit 0
+  fi
+
+  # Appended rather than overwritten: another tool may already own this
+  # hook, and clobbering someone's existing post-commit is not ours to do.
+  if [ ! -f "$hook" ]; then
+    printf '#!/usr/bin/env bash\n' > "$hook"
+  fi
+  printf '\n%s\n%s || true\n' "$HOOK_MARKER" "$(command -v observer-report || echo "$root/plugins/observer/bin/observer-report")" >> "$hook"
+  chmod +x "$hook"
+  warn "installed into .git/hooks/post-commit"
+}
+
+uninstall_hook() {
+  local root hook
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 1
+  hook="$root/.git/hooks/post-commit"
+  [ -f "$hook" ] || exit 0
+  # Drop the marker line and the line after it, leaving anything else.
+  sed -i.bak "/$HOOK_MARKER/,+1d" "$hook" && rm -f "$hook.bak"
+  warn "removed from .git/hooks/post-commit"
+}
+
+# The branch's task reference.
+#
+# Two forms, tried in order:
+#
+#   1. A short task key — `feat/OBS-123-nav-filter`. Every task has one, so
+#      this is the form that actually works. Passed straight to
+#      `report_work`, which resolves a key or a UUID.
+#   2. A GitHub issue number — `feat/187-nav-filter`. The fallback for
+#      branches cut before keys existed, and it only resolves for tasks
+#      that were pushed to GitHub.
+#
+# A branch with neither resolves to NOTHING rather than a guess: reporting
+# a commit against the wrong task is worse than reporting none, because it
+# is wrong data that looks right and nobody goes looking for it.
+#
+# Anchored on a separator so `REV2-1` inside a word is not read as a key.
+# Mirrors `taskKeyFromBranch` in src/modules/tasks/task-key.ts — the two
+# must agree, or a branch means one task to the hook and another to a tool.
+key_from_branch() {
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  printf '%s' "$branch" \
+    | grep -oE '(^|[^A-Za-z0-9])[A-Za-z]{2,6}-[0-9]{1,9}($|[^0-9])' \
+    | grep -oE '[A-Za-z]{2,6}-[0-9]{1,9}' | head -1
+}
+
+issue_from_branch() {
+  local branch
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  printf '%s' "$branch" | grep -oE '(^|[^0-9])([0-9]{1,6})([^0-9]|$)' \
+    | grep -oE '[0-9]{1,6}' | head -1
+}
+
+api() {
+  curl -fsS --max-time 15 \
+    -H "Authorization: Bearer ${OBSERVER_TOKEN}" \
+    -H "Content-Type: application/json" \
+    "$@"
+}
+
+# One JSON-RPC call to the MCP endpoint.
+mcp_call() {
+  local name="$1" args="$2"
+  api -X POST "$OBSERVER_URL/api/mcp" \
+    -H "Accept: application/json, text/event-stream" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$name\",\"arguments\":$args}}"
+}
+
+report() {
+  if [ -z "${OBSERVER_TOKEN:-}" ]; then
+    warn "OBSERVER_TOKEN not set — nothing reported"
+    exit 0
+  fi
+
+  # A key needs no lookup at all: `report_work` resolves it server-side,
+  # which is one round trip instead of two and works for every task rather
+  # than only the ones pushed to GitHub.
+  local task_ref
+  task_ref="$(key_from_branch)"
+
+  if [ -z "$task_ref" ]; then
+    local issue links
+    issue="$(issue_from_branch)"
+    if [ -z "$issue" ]; then
+      warn "branch carries no task key or issue number — nothing reported"
+      exit 0
+    fi
+
+    links="$(mcp_call list_github_links '{}' 2>/dev/null)" || {
+      warn "could not reach Observer — nothing reported"; exit 0;
+    }
+
+    # The tool returns its payload as JSON inside a text content block, so
+    # this pulls the task whose githubIssue matches. Kept to grep/sed so
+    # the hook has no dependency beyond curl and git.
+    task_ref="$(printf '%s' "$links" \
+      | tr '{' '\n' \
+      | grep "\"githubIssue\":$issue\b" \
+      | grep -oE '"id\\?":\\?"[0-9a-f-]{36}' \
+      | grep -oE '[0-9a-f-]{36}' | head -1)"
+
+    if [ -z "$task_ref" ]; then
+      warn "no Observer task linked to issue #$issue — nothing reported"
+      exit 0
+    fi
+  fi
+
+  local subject body
+  subject="$(git log -1 --pretty=%s)"
+  body="$(printf 'Commit %s — %s' "$(git rev-parse --short HEAD)" "$subject")"
+
+  # Comment only. Status, subtasks, dates and time are judgement calls a
+  # commit does not carry, and this hook has no way to ask: a commit is
+  # evidence that work happened, not evidence that a task is done. An agent
+  # calling `report_work` directly can supply the rest.
+  mcp_call report_work \
+    "{\"taskId\":\"$task_ref\",\"comment\":$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
+    >/dev/null 2>&1 \
+    && warn "reported to $task_ref" \
+    || warn "report failed — commit unaffected"
+  exit 0
+}
+
+case "${1:-report}" in
+  install)   install_hook ;;
+  uninstall) uninstall_hook ;;
+  report|"") report ;;
+  *) warn "unknown command: $1"; exit 1 ;;
+esac

@@ -1,0 +1,19 @@
+{
+  "name": "observer",
+  "description": "File issues, track tasks, plan sprints and log time in Observer OS from the terminal. Resolves which project the current folder is from its git remote.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Observer Studio",
+    "email": "team@observer.studio",
+    "url": "https://observer.studio"
+  },
+  "homepage": "https://github.com/Observerstudio/claude-plugins/tree/main/plugins/observer",
+  "keywords": [
+    "observer",
+    "time-tracking",
+    "project-management",
+    "tasks",
+    "standup",
+    "mcp"
+  ]
+}

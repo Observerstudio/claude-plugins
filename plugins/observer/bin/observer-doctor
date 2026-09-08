@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+#
+# Local setup checks for the Observer plugin.
+#
+# Prints facts, not advice — the `/observer:setup` command reads this and
+# explains what to do. Split that way because the shell can see things no
+# API call can (a git remote, whether the hook is installed, whether a
+# token is exported) while the API can see things the shell cannot without
+# a credential (whether this repo is linked to a project).
+#
+# Machine-readable `key=value` lines so the agent reading it cannot
+# misparse prose. Always exits 0: this is a diagnostic, and a non-zero exit
+# would make a *failed check* look like a *broken script*.
+
+set -uo pipefail
+
+say() { printf '%s=%s\n' "$1" "$2"; }
+
+# ── Is this even a git repo? ──────────────────────────────────────
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  say git_repo yes
+  root="$(git rev-parse --show-toplevel 2>/dev/null || echo "")"
+  say git_root "${root:-unknown}"
+
+  remote="$(git remote get-url origin 2>/dev/null || echo "")"
+  if [ -n "$remote" ]; then
+    say git_remote "$remote"
+  else
+    say git_remote none
+  fi
+
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
+  say git_branch "${branch:-unknown}"
+
+  # The same extraction the report hook uses. Mirrors taskKeyFromBranch in
+  # src/modules/tasks/task-key.ts — if these two ever disagree, a branch
+  # means one task to the hook and another to a tool.
+  key="$(printf '%s' "$branch" \
+    | grep -oE '(^|[^A-Za-z0-9])[A-Za-z]{2,6}-[0-9]{1,9}($|[^0-9])' \
+    | grep -oE '[A-Za-z]{2,6}-[0-9]{1,9}' | head -1)"
+  say branch_task_key "${key:-none}"
+
+  # ── Is the commit hook installed? ───────────────────────────────
+  hook="$root/.git/hooks/post-commit"
+  if [ -f "$hook" ] && grep -qF "# observer-report" "$hook" 2>/dev/null; then
+    say commit_hook installed
+  elif [ -f "$hook" ]; then
+    say commit_hook "not-installed (another post-commit hook exists)"
+  else
+    say commit_hook not-installed
+  fi
+else
+  say git_repo no
+  say git_remote none
+  say git_branch none
+  say branch_task_key none
+  say commit_hook not-applicable
+fi
+
+# ── Token, for the commit hook only ───────────────────────────────
+#
+# Reported as present/absent and never echoed. The rest of the plugin
+# authenticates through OAuth in the browser and needs no token at all.
+if [ -n "${OBSERVER_TOKEN:-}" ]; then
+  say observer_token present
+else
+  say observer_token absent
+fi
+say observer_url "${OBSERVER_URL:-https://os.observer.studio (default)}"
+
+exit 0

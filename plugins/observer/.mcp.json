@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "observer": {
+      "type": "http",
+      "url": "https://os.observer.studio/api/mcp"
+    }
+  }
+}

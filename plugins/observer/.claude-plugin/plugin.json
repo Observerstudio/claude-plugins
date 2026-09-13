@@ -1,7 +1,7 @@
 {
   "name": "observer",
   "description": "File issues, track tasks, plan sprints and log time in Observer OS from the terminal. Resolves which project the current folder is from its git remote.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Observer Studio",
     "email": "team@observer.studio",

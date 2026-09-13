@@ -116,6 +116,16 @@ asking.
 
 ## The automatic part
 
+Two triggers, one per boundary where work is born or lands.
+
+**`bin/observer-task-nudge`** is a Claude Code `PostToolUse` hook on `Bash`.
+After a `gh issue create` or `gh pr create` that printed a URL, it hands the
+agent that URL and tells it to file (or link) the Observer task in the same
+turn. Post rather than pre because the task needs the URL and should exist
+only for issues that actually landed; a nudge rather than a block because a
+hook cannot see whether the task already exists. Silent on everything else.
+
+
 `bin/observer-report` is a **git hook**, and that is the agnostic choice: a
 commit happens whichever agent — or person — made it, so one hook covers
 every tool anyone on the team uses. Install it per repo:

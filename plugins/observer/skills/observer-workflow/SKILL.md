@@ -18,22 +18,6 @@ list faster than anyone reads it, and prompt text routinely carries
 client-confidential detail into a workspace that has a client portal
 attached.
 
-## Every issue you file gets a task, the moment it exists
-
-When you create a GitHub issue or PR (`gh issue create`, `gh pr create`), file
-the matching Observer task **in the same turn** — `create_task` with the
-project from `project_for_repo`, the outcome as the title, the link in the
-description. If a task for that work already exists, link it with
-`push_task_to_github` / `sync_task_to_github` instead of filing a twin.
-
-The plugin's `PostToolUse` hook reminds you with the URL right after the
-command lands. It is a nudge, not a gate: it cannot see whether the task
-exists, so it never blocks — you do the filing.
-
-Why now and not at end of day: the board is where the team sees the day's
-work. An issue that lives only in GitHub is invisible to them until someone
-remembers, and by then the context that made a good title is gone.
-
 ## One call, not six
 
 `report_work` takes everything at once — status, comment, subtasks, due
@@ -80,6 +64,22 @@ A commit is evidence that work happened. It is not evidence that a task is
 done. Set `status` only when the work genuinely moved, and prefer leaving it
 alone over guessing.
 
+## Every issue you file gets a task, the moment it exists
+
+When you create a GitHub issue or PR (`gh issue create`, `gh pr create`), file
+the matching Observer task **in the same turn** — `create_task` with the
+project from `project_for_repo`, the outcome as the title, the link in the
+description. If a task for that work already exists, link it with
+`push_task_to_github` / `sync_task_to_github` instead of filing a twin.
+
+The plugin's `PostToolUse` hook reminds you with the URL right after the
+command lands. It is a nudge, not a gate: it cannot see whether the task
+exists, so it never blocks — you do the filing.
+
+Why now and not at end of day: the board is where the team sees the day's
+work. An issue that lives only in GitHub is invisible to them until someone
+remembers, and by then the context that made a good title is gone.
+
 ## Planning from a conversation proposes first
 
 `/observer:recap` turns a conversation into tasks, milestones and sprint
@@ -92,3 +92,14 @@ the list, and it drags conversation detail — sometimes client-confidential
 — into a workspace with a client portal attached. Sprints are never created;
 they come from the cadence. Planning one means `update_sprint` for the goal
 and `assign_tasks_to_sprint` for the tasks, in that order.
+
+A sprint belongs to **one project**, which is why `list_sprints` takes a
+`projectId` and why a task from another project is refused rather than
+quietly skipped. Capacity is that project's allocated hours — not the whole
+studio's — so a sprint's load means what it looks like it means.
+
+`plan_sprint` hands the selection to Observer instead: it fills the
+remaining capacity in priority order, respects dependencies, and leaves out
+anything unestimated rather than counting it as free. It **files the plan
+for review and moves nothing**, so propose it, say what it chose, and leave
+the decision with the user.

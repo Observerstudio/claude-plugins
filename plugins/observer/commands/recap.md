@@ -15,7 +15,9 @@ never match a project by how much its name resembles the folder.
 Then load what already exists, so the recap updates rather than duplicates:
 - `list_tasks` for the project (open statuses)
 - `list_milestones` for the project
-- `list_sprints` — the `ACTIVE` sprint and the next `PLANNED` one
+- `list_sprints` for the project — the `ACTIVE` sprint and the next
+  `PLANNED` one. It takes a `projectId`: each project runs its own cadence
+  and numbers its sprints from 1, so there is no studio-wide list.
 
 ## 2. Recap the conversation
 
@@ -34,7 +36,12 @@ Read the whole conversation back and pull out only the things that are
   conversation rarely invents a genuinely new one.
 - **Sprint** — which tasks belong in the active or next sprint, and the
   sprint goal if one was stated. Sprints are generated from the cadence, so
-  you never create one — you name its goal and commit tasks to it.
+  you never create one — you name its goal and commit tasks to it. A sprint
+  belongs to **one project**, so only that project's tasks can go in it;
+  `assign_tasks_to_sprint` refuses the rest and names them in
+  `wrongProject`. If you want Observer to work out what fits, `plan_sprint`
+  does it against the project's real capacity and files the result for
+  review — it moves nothing.
 
 Leave out: things the user explicitly deferred, speculation, and anything
 that is really a note for the user rather than work for the team.
